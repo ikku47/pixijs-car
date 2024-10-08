@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PixiJS Racing Game with Shooting</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pixi.js/5.3.3/pixi.min.js"></script>
+    <style>
+        body { margin: 0; overflow: hidden; }
+    </style>
+</head>
+<body>
+    <script>
+        // Game setup
+        const app = new PIXI.Application({
+            width: window.innerWidth,
+            height: window.innerHeight,
+            backgroundColor: 0x5C812F
+        });
+        document.body.appendChild(app.view);
+
+        // Game variables
+        let car, road, obstacles = [], bullets = [], score = 0;
+        const carSpeed = 5;
+        const obstacleSpeed = 3;
+        const bulletSpeed = 10;
+
+        // Create road
+        road = new PIXI.Graphics();
+        road.beginFill(0x333333);
+        road.drawRect(0, 0, app.screen.width, app.screen.height);
+        road.endFill();
+        app.stage.addChild(road);
+
+        // Create lane markings
+        const laneMarkings = new PIXI.Graphics();
+        laneMarkings.beginFill(0xFFFFFF);
+        for (let i = 0; i < app.screen.height; i += 40) {
+            laneMarkings.drawRect(app.screen.width / 2 - 5, i, 10, 20);
+        }
+        laneMarkings.endFill();
+        app.stage.addChild(laneMarkings);
+
+        // Create car
+        car = new PIXI.Graphics();
+        car.beginFill(0xFF0000);
+        car.drawRect(-30, -50, 60, 100);
+        car.endFill();
+        car.x = app.screen.width / 2;
+        car.y = app.screen.height - 100;
+        app.stage.addChild(car);
+
+        // Create score text
+        const scoreText = new PIXI.Text('Score: 0', {
+            fontFamily: 'Arial',
+            fontSize: 24,
+            fill: 0xFFFFFF
+        });
+        scoreText.x = 10;
+        scoreText.y = 10;
+        app.stage.addChild(scoreText);
+
+        // Keyboard event listeners
+        let keys = {};
+        window.addEventListener('keydown', (e) => keys[e.code] = true);
+        window.addEventListener('keyup', (e) => keys[e.code] = false);
+
+        // Create obstacle
+        function createObstacle() {
+            const obstacle = new PIXI.Graphics();
+            obstacle.beginFill(0x808080);
+            obstacle.drawRect(-30, -30, 60, 60);
+            obstacle.endFill();
+            obstacle.x = Math.random() * (app.screen.width - 100) + 50;
+            obstacle.y = -50;
+            obstacles.push(obstacle);
+            app.stage.addChild(obstacle);
+        }
+
+        // Create bullet
+        function createBullet() {
+            const bullet = new PIXI.Graphics();
+            bullet.beginFill(0xFFFF00);
+            bullet.drawRect(-5, -10, 10, 20);
+            bullet.endFill();
+            bullet.x = car.x;
+            bullet.y = car.y - 50;
+            bullets.push(bullet);
+            app.stage.addChild(bullet);
+        }
+
+        // Shooting cooldown
+        let canShoot = true;
+        function resetShootCooldown() {
+            canShoot = true;
+        }
+
+        // Game loop
+        app.ticker.add((delta) => {
+            // Move lane markings
+            laneMarkings.y += obstacleSpeed * delta;
+            if (laneMarkings.y >= 40) {
+                laneMarkings.y = 0;
+            }
+
+            // Move car
+            if (keys['ArrowLeft'] && car.x > 50) car.x -= carSpeed * delta;
+            if (keys['ArrowRight'] && car.x < app.screen.width - 50) car.x += carSpeed * delta;
+
+            // Shoot
+            if (keys['Space'] && canShoot) {
+                createBullet();
+                canShoot = false;
+                setTimeout(resetShootCooldown, 500); // 0.5 second cooldown
+            }
+
+            // Move and check bullets
+            for (let i = bullets.length - 1; i >= 0; i--) {
+                bullets[i].y -= bulletSpeed * delta;
+
+                // Remove off-screen bullets
+                if (bullets[i].y < -50) {
+                    app.stage.removeChild(bullets[i]);
+                    bullets.splice(i, 1);
+                }
+            }
+
+            // Move and check obstacles
+            for (let i = obstacles.length - 1; i >= 0; i--) {
+                obstacles[i].y += obstacleSpeed * delta;
+
+                // Check collision with car
+                if (checkCollision(car, obstacles[i])) {
+                    alert('Game Over! Your score: ' + score);
+                    location.reload();
+                }
+
+                // Check collision with bullets
+                for (let j = bullets.length - 1; j >= 0; j--) {
+                    if (checkCollision(bullets[j], obstacles[i])) {
+                        app.stage.removeChild(obstacles[i]);
+                        obstacles.splice(i, 1);
+                        app.stage.removeChild(bullets[j]);
+                        bullets.splice(j, 1);
+                        score += 10;
+                        scoreText.text = 'Score: ' + score;
+                        break;
+                    }
+                }
+
+                // Remove off-screen obstacles
+                if (obstacles[i] && obstacles[i].y > app.screen.height + 50) {
+                    app.stage.removeChild(obstacles[i]);
+                    obstacles.splice(i, 1);
+                    score++;
+                    scoreText.text = 'Score: ' + score;
+                }
+            }
+
+            // Create new obstacles
+            if (Math.random() < 0.02) {
+                createObstacle();
+            }
+        });
+
+        // Collision detection
+        function checkCollision(a, b) {
+            const ab = a.getBounds();
+            const bb = b.getBounds();
+            return ab.x + ab.width > bb.x && ab.x < bb.x + bb.width && ab.y + ab.height > bb.y && ab.y < bb.y + bb.height;
+        }
+
+        // Resize handler
+        window.addEventListener('resize', () => {
+            app.renderer.resize(window.innerWidth, window.innerHeight);
+            road.width = app.screen.width;
+            road.height = app.screen.height;
+            car.x = app.screen.width / 2;
+            car.y = app.screen.height - 100;
+
+            // Redraw lane markings
+            laneMarkings.clear();
+            laneMarkings.beginFill(0xFFFFFF);
+            for (let i = 0; i < app.screen.height; i += 40) {
+                laneMarkings.drawRect(app.screen.width / 2 - 5, i, 10, 20);
+            }
+            laneMarkings.endFill();
+        });
+    </script>
+</body>
+</html>
